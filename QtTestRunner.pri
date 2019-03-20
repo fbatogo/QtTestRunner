@@ -1,7 +1,7 @@
 INCLUDEPATH *= $$PWD
 
 SOURCES += \
-    TestRunner/runtestsuites.cpp
+    $$PWD/TestRunner/runtestsuites.cpp
 
 HEADERS += \
-    TestRunner/runtestsuites.h
+    $$PWD/TestRunner/runtestsuites.h
