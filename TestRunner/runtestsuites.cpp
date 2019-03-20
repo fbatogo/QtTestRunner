@@ -101,6 +101,10 @@ int RunTestSuites::executeAll()
         std::cout << std::endl << std::endl;
     }
 
+    if (failedTests > 0) {
+        std::cout << "!!!! " << failedTests << " test(s) failed!" << std::endl;
+    }
+
     if (mReportFailedTestsInReturnCode) {
         return failedTests;
     }
