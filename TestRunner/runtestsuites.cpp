@@ -2,82 +2,80 @@
 
 #include <iostream>
 
-#include "testsuite.h"
 #include <QtTest>
 
 RunTestSuites::RunTestSuites()
 {
-    mArgc = 0;
-    mArgv = nullptr;
+    // Start with an empty log prefix.
+    mLogPrefix.clear();
 
-    // Populate the parameter map.
-    populateParameterMap();
+    // Make sure the log file type is an empty string.
+    mLogFileType.clear();
+
+    // By default, report the number of failed tests as the return code.
+    mReportFailedTestsInReturnCode = true;
+
+    // Set the default verbosity. (Which is silent.)
+    mVerbosity = 0;
+
+    // By default, log to the console in addition to any log file we may log to.
+    mLogToConsole = true;
 }
 
 /**
- * @brief RunTestSuites::setCommandLineParameters - Provide the command line parameters that should be used for
- *      running this test app.
+ * @brief RunTestSuites::setLogPrefix - Set a log file prefix that we should use when creating
+ *      log files.
  *
- * @param argc - The number of arguments that were passed in.
- * @param argv - A pointer to an array of arguments that are provided.
- *
- * @return true if the command line parameters are all understood.  false otherwise.
+ * @param prefix - The new log prefix to use.
  */
-bool RunTestSuites::setCommandLineParameters(int argc, char *argv[])
+void RunTestSuites::setLogPrefix(const QString &prefix)
 {
-
+    mLogPrefix = prefix;
+    std::cout << "Will use a prefix of '" << mLogPrefix.toStdString() << "' when creating output files." << std::endl;
 }
 
 /**
- * @brief RunTestSuites::knownParameters - Return the parameters that can be used with this test suite runner.
+ * @brief RunTestSuites::createLogFiles - Indicate that the test runner should create log files as
+ *      tests are run.
  *
- * @return QMap<QString, QMap<QString, QString> > containing the map of parameters that can be used with this
- *      test suite runner.
+ * @param fileType - One of the file types that is allowed to be created.
  */
-QMap<QString, QMap<QString, QString> > RunTestSuites::knownParameters()
+void RunTestSuites::createLogFiles(QString fileType)
 {
-    return mParameterMap;
+    mLogFileType = fileType;
+    std::cout << "Will use an output file type of '" << mLogFileType.toStdString() << "' when creating output files." << std::endl;
 }
 
 /**
- * @brief RunTestSuites::parameterHelp - Return a string that indicates the parameters that are understood by this
- *      test helper app, and what each one does.
+ * @brief RunTestSuites::setLogToConsole - Set the value that indicates if test results should
+ *      be written to the console, in addition to any log file.
  *
- * @return QString containing the list of parameters that are understood and supported.
+ * @param shouldLogToConsole - Set to true (the default) to log to the console in addition to any
+ *      log files.  Set to false to only log to log files.
  */
-QString RunTestSuites::parameterHelp()
+void RunTestSuites::setLogToConsole(bool shouldLogToConsole)
 {
-    QString result;
-
-    result = mArgv[0];
-    result += " - Missing Qt Unit Test Runner\n\n";
-    result += "  Command Line Options :\n\n";
-    result += "Logging Options\n";
-    result += "---------------\n";
-    result += " -o <filename_prefix> -- Causes test output to be written using the specified prefix to the result files.\n";
-    result += " -txt -- Output the test results as a text file.\n";
-    result += " -xml -- Output the test results as an XML file.\n";
-    result += " -xunitxml -- Output the test results as an Xunit XML file.\n";
-    result += "\n\n";
-    result += "Test Log Detail Options\n";
-    result += "-----------------------\n";
-    result += " -silent -- Only show fatal errors in the output test logs.\n";
-    result += " -v1 -- Show each test function as it is entered.\n";
-    result += " -v2 -- Show each QCOMPARE() and QVERIFY().\n";
-    result += " -vs -- Show all signals that get emitted and slot invocations resulting from thos signals.\n";
-    result += "\n\n";
-    result += "Testing Options\n";
-    result += "---------------\n";
-    result += " -functions -- List all available test functions.\n";
-    result += " -datatags -- List all data tags available in a test.\n";
-    result += "\n\n";
-
-    return result;
+    mLogToConsole = shouldLogToConsole;
 }
 
-bool RunTestSuites::parametersAreValid()
+/**
+ * @brief RunTestSuites::doNotReportFailedTestsInReturnCode - Don't report the number of failed tests in the result
+ *      code from the executable.   (Basically, always return 0.)
+ */
+void RunTestSuites::doNotReportFailedTestsInReturnCode()
 {
+    mReportFailedTestsInReturnCode = true;
+    std::cout << "Will *NOT* report failed tests in the return code." << std::endl;
+}
 
+/**
+ * @brief RunTestSuites::addTest - Add a test object to the queue of test suites to run.
+ *
+ * @param testObject - A QObject based object containing tests that we want to run.
+ */
+void RunTestSuites::addTest(QObject *testObject)
+{
+    mTestObjects.push_back(testObject);
 }
 
 /**
@@ -87,30 +85,109 @@ bool RunTestSuites::parametersAreValid()
  */
 int RunTestSuites::executeAll()
 {
-    // setup lambda
-    int status = 0;
-    auto runTest = [&status, argc, argv](QObject* obj) {
-        status |= QTest::qExec(obj, argc, argv);
-    };
+    int failedTests = 0;
+    QStringList parameters;
 
-    // run suite
-    auto &suite = TestSuite::suite();
-    for (auto it = suite.begin(); it != suite.end(); ++it) {
-        std::cout << "Class name : " << (*it)->metaObject()->className() << std::endl;
-        runTest(*it);
+    // Add some space below the previous output.
+    std::cout << std::endl << std::endl;
+
+    for (const auto testObject : mTestObjects) {
+        parameters = buildArgumentListForObject(testObject);
+
+        // Run the tests in the test object.
+        failedTests += QTest::qExec(testObject, parameters);
+
+        // Add some space below the previous output.
+        std::cout << std::endl << std::endl;
     }
-}
 
-int RunTestSuites::executeByPattern(QString pattern)
-{
+    if (mReportFailedTestsInReturnCode) {
+        return failedTests;
+    }
 
+    // Otherwise, report 0.
+    return 0;
 }
 
 /**
- * @brief RunTestSuites::populateParameterMap - Populate the map of parameters and parameter headings that
- *      are used for this app.
+ * @brief RunTestSuites::executeByPattern - Execute tests based on a string, or string pattern.
+ *
+ * @param pattern - The string, or string pattern to use to select tests to execute.
+ *
+ * @return int containing the number of tests that failed.
  */
-void RunTestSuites::populateParameterMap()
+/*
+int RunTestSuites::executeByPattern(QString pattern)
 {
+    int failedTests = 0;
 
+    // XXX Figure out tests to run, and run them here.
+
+    if (mReportFailedTestsInReturnCode) {
+        return failedTests;
+    }
+
+    // Otherwise, report 0.
+    return 0;
+}*/
+
+/**
+ * @brief RunTestSuites::buildArgumentListForObject - Build the list of arguments that we are going to
+ *      pass to the QTest runner.
+ *
+ * @return QStringList containing the list of arguments that we should use when running.
+ */
+QStringList RunTestSuites::buildArgumentListForObject(QObject *toTest)
+{
+    QStringList result;
+    std::string objectName;
+
+    // Make sure it starts out clear.
+    result.clear();
+
+    // The QTest::qExec call wants the string list to be populated exactly like the argv passed
+    // in to the app would be.  So, we need to start with an app name.  (Doesn't matter what it is.)
+    result.push_back("appname");
+
+    if (mLogToConsole) {
+        // Make sure we log to the console in addition to any other logging we may do.
+        result.push_back("-o");
+        result.push_back("-,txt");
+    }
+
+    // See if we need to crank up the verbosity.
+    if (mVerbosity > 0) {
+        switch (mVerbosity) {
+        case 1:
+            result.push_back("-v1");
+            break;
+
+        case 2:
+            result.push_back("-v2");
+            break;
+
+        case 3:
+            result.push_back("-vs");
+            break;
+        }
+    }
+
+    // See if we should be logging results.
+    if (!mLogFileType.isEmpty()) {
+        // Get the test object name, so we can name the log file.
+        objectName = toTest->metaObject()->className();
+
+        // Add the parameter to indicate that we want to log to a file.
+        result.push_back("-o");
+
+        // Then, add the name of the log file, with prefix, if needed.
+        if (mLogPrefix.isEmpty()) {
+            result.push_back(QString::fromStdString(objectName) + "." + mLogFileType + "," + mLogFileType);
+        } else {
+            result.push_back(mLogPrefix + QString::fromStdString(objectName) + "." + mLogFileType + "," + mLogFileType);
+        }
+    }
+
+    return result;
 }
+

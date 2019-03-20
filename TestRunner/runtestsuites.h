@@ -2,30 +2,39 @@
 #define RUNTESTSUITES_H
 
 #include <QString>
-#include <QMap>
+#include <QStringList>
+#include <QObject>
 
 class RunTestSuites
 {
 public:
     RunTestSuites();
 
-    bool setCommandLineParameters(int argc, char *argv[]);
+    void setLogPrefix(const QString &prefix);
+    void createLogFiles(QString fileType);
 
-    QMap<QString, QMap<QString, QString> > knownParameters();
+    void setLogToConsole(bool shouldLogToConsole);
 
-    QString parameterHelp();
+    void setVerbosity(int verbosity);
 
-    bool parametersAreValid();
+    void doNotReportFailedTestsInReturnCode();
+
+    void addTest(QObject *testObject);
 
     int executeAll();
-    int executeByPattern(QString pattern);
+//    int executeByPattern(QString pattern);
+
+protected:
+    QStringList buildArgumentListForObject(QObject *toTest);
 
 private:
-    void populateParameterMap();
+    QString mLogPrefix;
+    QString mLogFileType;
+    bool mReportFailedTestsInReturnCode;
+    int mVerbosity;
+    bool mLogToConsole;
 
-    int mArgc;
-    char **mArgv;
-    QMap<QString, QMap<QString, QString> > mParameterMap;
+    std::vector<QObject*> mTestObjects;
 };
 
 #endif // RUNTESTSUITES_H
